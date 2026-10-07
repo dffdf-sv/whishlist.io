@@ -92,7 +92,7 @@ app.post("/api/lists/:id/items", (req,res) => {
   const title = cleanText(req.body.title,180);
   if (!title) return res.status(400).json({error:"Item title is required"});
   const url = cleanText(req.body.url,1000);
-  if (url && !/^https?:\\/\\//i.test(url)) return res.status(400).json({error:"URL must start with http:// or https://"});
+  if (url && !/^https?:\/\//i.test(url)) return res.status(400).json({error:"URL must start with http:// or https://"});
   const itemId = id();
   db.prepare("INSERT INTO items(id,list_id,title,url,price,note,priority,reserved,created_at) VALUES(?,?,?,?,?,?,?,?,?)")
     .run(itemId,req.params.id,title,url,cleanText(req.body.price,60),cleanText(req.body.note,500),Number(req.body.priority)||0,0,now());
