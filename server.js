@@ -11,15 +11,15 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
-try { db.exec("ALTER TABLE lists ADD COLUMN username TEXT DEFAULT ''"); } catch (_) {}
-try { db.exec("ALTER TABLE lists ADD COLUMN password_hash TEXT DEFAULT ''"); } catch (_) {}
-try { db.exec("ALTER TABLE lists ADD COLUMN dob TEXT DEFAULT ''"); } catch (_) {}
 db.exec(`
 CREATE TABLE IF NOT EXISTS lists (
   id TEXT PRIMARY KEY,
   manage_token TEXT UNIQUE NOT NULL,
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
+  username TEXT DEFAULT '',
+  password_hash TEXT DEFAULT '',
+  dob TEXT DEFAULT '',
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS items (
@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS items (
 );
 CREATE INDEX IF NOT EXISTS idx_items_list ON items(list_id);
 `);
+try { db.exec("ALTER TABLE lists ADD COLUMN username TEXT DEFAULT ''"); } catch (_) {}
+try { db.exec("ALTER TABLE lists ADD COLUMN password_hash TEXT DEFAULT ''"); } catch (_) {}
+try { db.exec("ALTER TABLE lists ADD COLUMN dob TEXT DEFAULT ''"); } catch (_) {}
 
 app.use(express.json({ limit: "64kb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -60,13 +63,24 @@ function ownerList(listId, token) {
   return list && list.manage_token === token ? list : null;
 }
 
+app.post("/api/login", (req,res) => {
+  const username = cleanText(req.body.username, 80);
+  const password = String(req.body.password ?? "").slice(0, 200);
+  if (!username || !password) return res.status(400).json({error:"Username and password are required"});
+  const list = db.prepare("SELECT id,manage_token,username,password_hash FROM lists WHERE username=? AND password_hash!=''").get(username);
+  if (!list) return res.status(401).json({error:"Invalid username or password"});
+  const hash = crypto.scryptSync(password, username || list.id, 64).toString("hex");
+  if (hash !== list.password_hash) return res.status(401).json({error:"Invalid username or password"});
+  res.json({id:list.id, manageUrl:"/manage/"+list.id+"/"+list.manage_token});
+});
+
 app.post("/api/lists", (req,res) => {
   const title = cleanText(req.body.title, 120) || "My Wishlist";
   const description = cleanText(req.body.description, 500);
   const username = cleanText(req.body.username, 80);
   const password = String(req.body.password ?? "").slice(0, 200);
   const dob = cleanText(req.body.dob, 20);
-  const passwordHash = password ? crypto.scryptSync(password, crypto.randomBytes(16), 64).toString("hex") : "";
+  const passwordHash = password ? crypto.scryptSync(password, username || listId, 64).toString("hex") : "";
   const listId = id();
   const manageToken = id() + id();
   db.prepare("INSERT INTO lists(id,manage_token,title,description,username,password_hash,dob,created_at) VALUES(?,?,?,?,?,?,?,?)")
@@ -135,6 +149,7 @@ app.post("/api/lists/:listId/items/:itemId/unreserve", (req,res) => {
   res.json({ok:true});
 });
 
+app.get("/login", (_,res) => res.sendFile(path.join(__dirname,"public","login.html")));
 app.get("/list/:id", (_,res) => res.sendFile(path.join(__dirname,"public","list.html")));
 app.get("/manage/:id/:token", (_,res) => res.sendFile(path.join(__dirname,"public","manage.html")));
 app.use((_,res) => res.sendFile(path.join(__dirname,"public","index.html")));
