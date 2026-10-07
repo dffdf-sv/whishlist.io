@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS items (
   FOREIGN KEY(list_id) REFERENCES lists(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_items_list ON items(list_id);
+CREATE INDEX IF NOT EXISTS idx_lists_username ON lists(username);
 `);
 try { db.exec("ALTER TABLE lists ADD COLUMN username TEXT DEFAULT ''"); } catch (_) {}
 try { db.exec("ALTER TABLE lists ADD COLUMN password_hash TEXT DEFAULT ''"); } catch (_) {}
@@ -67,11 +68,30 @@ app.post("/api/login", (req,res) => {
   const username = cleanText(req.body.username, 80);
   const password = String(req.body.password ?? "").slice(0, 200);
   if (!username || !password) return res.status(400).json({error:"Username and password are required"});
-  const list = db.prepare("SELECT id,manage_token,username,password_hash FROM lists WHERE username=? AND password_hash!=''").get(username);
-  if (!list) return res.status(401).json({error:"Invalid username or password"});
-  const hash = crypto.scryptSync(password, username || list.id, 64).toString("hex");
-  if (hash !== list.password_hash) return res.status(401).json({error:"Invalid username or password"});
-  res.json({id:list.id, manageUrl:"/manage/"+list.id+"/"+list.manage_token});
+
+  const lists = db.prepare("SELECT id,manage_token,username,password_hash,title,description,created_at FROM lists WHERE username=? AND password_hash!='' ORDER BY created_at DESC").all(username);
+  if (!lists.length) return res.status(401).json({error:"Invalid username or password"});
+
+  const matches = lists.filter(list => {
+    const hash = crypto.scryptSync(password, username || list.id, 64).toString("hex");
+    return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(list.password_hash, "hex"));
+  });
+  if (!matches.length) return res.status(401).json({error:"Invalid username or password"});
+
+  res.json({
+    username,
+    lists: matches.map(list => {
+      const itemCount = db.prepare("SELECT COUNT(*) AS count FROM items WHERE list_id=?").get(list.id).count;
+      return {
+        id:list.id,
+        title:list.title,
+        description:list.description,
+        itemCount,
+        manageUrl:"/manage/"+list.id+"/"+list.manage_token,
+        shareUrl:"/list/"+list.id
+      };
+    })
+  });
 });
 
 app.post("/api/lists", (req,res) => {
@@ -80,9 +100,10 @@ app.post("/api/lists", (req,res) => {
   const username = cleanText(req.body.username, 80);
   const password = String(req.body.password ?? "").slice(0, 200);
   const dob = cleanText(req.body.dob, 20);
-  const passwordHash = password ? crypto.scryptSync(password, username || listId, 64).toString("hex") : "";
   const listId = id();
   const manageToken = id() + id();
+  const passwordHash = password ? crypto.scryptSync(password, username || listId, 64).toString("hex") : "";
+
   db.prepare("INSERT INTO lists(id,manage_token,title,description,username,password_hash,dob,created_at) VALUES(?,?,?,?,?,?,?,?)")
     .run(listId, manageToken, title, description, username, passwordHash, dob, now());
   res.status(201).json({ id:listId, manageToken, shareUrl:`/list/${listId}`, manageUrl:`/manage/${listId}/${manageToken}` });
@@ -136,10 +157,12 @@ app.delete("/api/lists/:listId/items/:itemId", (req,res) => {
 });
 
 app.post("/api/lists/:listId/items/:itemId/reserve", (req,res) => {
-  const item = db.prepare("SELECT * FROM items WHERE id=? AND list_id=?").get(req.params.itemId,req.params.listId);
-  if (!item) return res.status(404).json({error:"Item not found"});
-  if (item.reserved) return res.status(409).json({error:"This gift has already been reserved"});
-  db.prepare("UPDATE items SET reserved=1 WHERE id=? AND list_id=?").run(req.params.itemId,req.params.listId);
+  const changed = db.prepare("UPDATE items SET reserved=1 WHERE id=? AND list_id=? AND reserved=0").run(req.params.itemId,req.params.listId).changes;
+  if (!changed) {
+    const item = db.prepare("SELECT id,reserved FROM items WHERE id=? AND list_id=?").get(req.params.itemId,req.params.listId);
+    if (!item) return res.status(404).json({error:"Item not found"});
+    return res.status(409).json({error:"This gift has already been reserved"});
+  }
   res.json({ok:true});
 });
 
@@ -149,9 +172,9 @@ app.post("/api/lists/:listId/items/:itemId/unreserve", (req,res) => {
   res.json({ok:true});
 });
 
-app.get("/login", (_,res) => res.sendFile(path.join(__dirname,"public","login.html")));
-app.get("/list/:id", (_,res) => res.sendFile(path.join(__dirname,"public","list.html")));
-app.get("/manage/:id/:token", (_,res) => res.sendFile(path.join(__dirname,"public","manage.html")));
-app.use((_,res) => res.sendFile(path.join(__dirname,"public","index.html")));
+app.get("/login", (_,res) => res.sendFile(path.join(__dirname, "public", "login.html")));
+app.get("/list/:id", (_,res) => res.sendFile(path.join(__dirname, "public", "list.html")));
+app.get("/manage/:id/:token", (_,res) => res.sendFile(path.join(__dirname, "public", "manage.html")));
+app.use((_,res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 
 app.listen(PORT, () => console.log(`Whishlist.io running on port ${PORT}`));
