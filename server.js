@@ -130,6 +130,6 @@ app.post("/api/lists/:listId/items/:itemId/unreserve", (req,res) => {
 
 app.get("/list/:id", (_,res) => res.sendFile(path.join(__dirname,"public","list.html")));
 app.get("/manage/:id/:token", (_,res) => res.sendFile(path.join(__dirname,"public","manage.html")));
-app.get("*", (_,res) => res.sendFile(path.join(__dirname,"public","index.html")));
+app.use((_,res) => res.sendFile(path.join(__dirname,"public","index.html")));
 
 app.listen(PORT, () => console.log(`Whishlist.io running on port ${PORT}`));
