@@ -11,6 +11,9 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
+try { db.exec("ALTER TABLE lists ADD COLUMN username TEXT DEFAULT ''"); } catch (_) {}
+try { db.exec("ALTER TABLE lists ADD COLUMN password_hash TEXT DEFAULT ''"); } catch (_) {}
+try { db.exec("ALTER TABLE lists ADD COLUMN dob TEXT DEFAULT ''"); }
 db.exec(`
 CREATE TABLE IF NOT EXISTS lists (
   id TEXT PRIMARY KEY,
@@ -60,10 +63,14 @@ function ownerList(listId, token) {
 app.post("/api/lists", (req,res) => {
   const title = cleanText(req.body.title, 120) || "My Wishlist";
   const description = cleanText(req.body.description, 500);
+  const username = cleanText(req.body.username, 80);
+  const password = String(req.body.password ?? "").slice(0, 200);
+  const dob = cleanText(req.body.dob, 20);
+  const passwordHash = password ? crypto.scryptSync(password, crypto.randomBytes(16), 64).toString("hex") : "";
   const listId = id();
   const manageToken = id() + id();
-  db.prepare("INSERT INTO lists(id,manage_token,title,description,created_at) VALUES(?,?,?,?,?)")
-    .run(listId, manageToken, title, description, now());
+  db.prepare("INSERT INTO lists(id,manage_token,title,description,username,password_hash,dob,created_at) VALUES(?,?,?,?,?,?,?,?)")
+    .run(listId, manageToken, title, description, username, passwordHash, dob, now());
   res.status(201).json({ id:listId, manageToken, shareUrl:`/list/${listId}`, manageUrl:`/manage/${listId}/${manageToken}` });
 });
 
@@ -76,7 +83,7 @@ app.get("/api/lists/:id", (req,res) => {
 app.get("/api/lists/:id/manage/:token", (req,res) => {
   if (!ownerList(req.params.id, req.params.token)) return res.status(403).json({error:"Invalid management link"});
   const list = publicList(req.params.id);
-  res.json({...list, manageToken:req.params.token});
+  res.json({...list, password_hash:undefined, manageToken:req.params.token});
 });
 
 app.patch("/api/lists/:id/manage/:token", (req,res) => {
