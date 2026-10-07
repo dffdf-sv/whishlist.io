@@ -1,11 +1,11 @@
 {
   "name": "whishlist-io",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "A no-account wishlist and gift registry.",
   "main": "server.js",
   "scripts": { "start": "node server.js", "dev": "node server.js" },
-  "engines": { "node": ">=20" },
+  "engines": { "node": "22.x" },
   "dependencies": {
     "better-sqlite3": "^11.10.0",
     "express": "^5.1.0"
