@@ -18,7 +18,7 @@ Account-free wishlist / gift registry.
 npm install
 npm start
 ```
-Then open http://localhost:3000.
+Then open http://localhost:3000. (published on https://whishlist-io.onrender.com/)
 
 ## Security
 The management URL is the credential. Anyone who has it can edit the list. There is deliberately no account recovery.
