@@ -122,7 +122,7 @@ app.post("/api/lists/:listId/items/:itemId/reserve",(req,res)=>{
   if(!changed){const item=db.prepare("SELECT id FROM items WHERE id=? AND list_id=?").get(req.params.itemId,req.params.listId);if(!item)return res.status(404).json({error:"Item not found"});return res.status(409).json({error:"This gift has already been reserved"})}
   res.json({ok:true});backupToGitHub();
 });
-app.post("/api/lists/:listId/items/:itemId/unreserve",(req,res)=>{if(!ownerList(req.params.listId,req.params.manageToken))return res.status(403).json({error:"Invalid management link"});db.prepare("UPDATE items SET reserved=0 WHERE id=? AND list_id=?").run(req.params.itemId,req.params.listId);res.json({ok:true});backupToGitHub()});
+app.post("/api/lists/:listId/items/:itemId/unreserve",(req,res)=>{if(!ownerList(req.params.listId,req.body.manageToken))return res.status(403).json({error:"Invalid management link"});db.prepare("UPDATE items SET reserved=0 WHERE id=? AND list_id=?").run(req.params.itemId,req.params.listId);res.json({ok:true});backupToGitHub()});
 
 app.get("/login",(_,res)=>res.sendFile(path.join(__dirname,"public","login.html")));
 app.get("/list/:id",(_,res)=>res.sendFile(path.join(__dirname,"public","list.html")));
