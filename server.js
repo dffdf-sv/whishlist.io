@@ -13,7 +13,7 @@ const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
 try { db.exec("ALTER TABLE lists ADD COLUMN username TEXT DEFAULT ''"); } catch (_) {}
 try { db.exec("ALTER TABLE lists ADD COLUMN password_hash TEXT DEFAULT ''"); } catch (_) {}
-try { db.exec("ALTER TABLE lists ADD COLUMN dob TEXT DEFAULT ''"); }
+try { db.exec("ALTER TABLE lists ADD COLUMN dob TEXT DEFAULT ''"); } catch (_) {}
 db.exec(`
 CREATE TABLE IF NOT EXISTS lists (
   id TEXT PRIMARY KEY,
