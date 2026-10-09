@@ -81,8 +81,8 @@ async function loadFromGitHub(){
   if(response.status===404){console.log("No encrypted GitHub backup found; starting with the local database.");return}
   if(!response.ok)throw new Error("GitHub restore request failed with HTTP "+response.status);
   const file=await response.json();
-  const encryptedPayload=Buffer.from(String(file.content||"").replace(/\\s/g,""),"base64").toString("utf8");
-  const packed=Buffer.from(encryptedPayload,"base64");
+  // GitHub returns file bytes as base64; the file contains packed IV + auth tag + ciphertext directly.
+  const packed=Buffer.from(String(file.content||"").replace(/\s/g,""),"base64");
   if(packed.length<29)throw new Error("Encrypted GitHub backup is invalid or empty");
   const iv=packed.subarray(0,12),tag=packed.subarray(12,28),ciphertext=packed.subarray(28);
   const key=crypto.createHash("sha256").update(process.env.GITHUB_DATA_KEY).digest();
