@@ -67,6 +67,40 @@ async function backupToGitHub(){
   }catch(err){console.error("Encrypted GitHub backup failed:",err.message)}
 }
 
+async function loadFromGitHub(){
+  if(!process.env.GITHUB_TOKEN||!process.env.GITHUB_DATA_REPO||!process.env.GITHUB_DATA_KEY){
+    console.log("GitHub data restore skipped: configure GITHUB_TOKEN, GITHUB_DATA_REPO and GITHUB_DATA_KEY.");
+    return;
+  }
+  const parts=process.env.GITHUB_DATA_REPO.split("/");
+  if(parts.length!==2||!parts[0]||!parts[1])throw new Error("GITHUB_DATA_REPO must be owner/repository");
+  const filePath=process.env.GITHUB_DATA_PATH||"data/whishlist.enc";
+  const url="https://api.github.com/repos/"+parts[0]+"/"+parts[1]+"/contents/"+filePath;
+  const headers={"Authorization":"Bearer "+process.env.GITHUB_TOKEN,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"whishlist.io"};
+  const response=await fetch(url,{headers});
+  if(response.status===404){console.log("No encrypted GitHub backup found; starting with the local database.");return}
+  if(!response.ok)throw new Error("GitHub restore request failed with HTTP "+response.status);
+  const file=await response.json();
+  const encryptedPayload=Buffer.from(String(file.content||"").replace(/\\s/g,""),"base64").toString("utf8");
+  const packed=Buffer.from(encryptedPayload,"base64");
+  if(packed.length<29)throw new Error("Encrypted GitHub backup is invalid or empty");
+  const iv=packed.subarray(0,12),tag=packed.subarray(12,28),ciphertext=packed.subarray(28);
+  const key=crypto.createHash("sha256").update(process.env.GITHUB_DATA_KEY).digest();
+  const decipher=crypto.createDecipheriv("aes-256-gcm",key,iv);
+  decipher.setAuthTag(tag);
+  const snapshot=JSON.parse(Buffer.concat([decipher.update(ciphertext),decipher.final()]).toString("utf8"));
+  if(snapshot.version!==1||!Array.isArray(snapshot.accounts)||!Array.isArray(snapshot.lists)||!Array.isArray(snapshot.items))throw new Error("GitHub backup format is not supported");
+  const count=db.prepare("SELECT (SELECT COUNT(*) FROM accounts)+(SELECT COUNT(*) FROM lists)+(SELECT COUNT(*) FROM items) AS n").get().n;
+  if(count>0){console.log("GitHub restore skipped because the local database already contains data.");return}
+  const restore=db.transaction(()=>{
+    for(const a of snapshot.accounts)db.prepare("INSERT OR IGNORE INTO accounts(id,username,password_hash,password_salt,dob,created_at) VALUES(?,?,?,?,?,?)").run(a.id,a.username,a.password_hash,a.password_salt,a.dob||"",a.created_at);
+    for(const l of snapshot.lists)db.prepare("INSERT OR IGNORE INTO lists(id,manage_token,account_id,title,description,username,created_at) VALUES(?,?,?,?,?,?,?)").run(l.id,l.manage_token,l.account_id||null,l.title,l.description||"",l.username||"",l.created_at);
+    for(const i of snapshot.items)db.prepare("INSERT OR IGNORE INTO items(id,list_id,title,url,price,note,priority,reserved,created_at) VALUES(?,?,?,?,?,?,?,?,?)").run(i.id,i.list_id,i.title,i.url||"",i.price||"",i.note||"",i.priority||0,i.reserved||0,i.created_at);
+  });
+  restore();
+  console.log("Restored encrypted GitHub backup:",snapshot.accounts.length,"accounts,",snapshot.lists.length,"wishlists,",snapshot.items.length,"items.");
+}
+
 app.use(express.json({limit:"64kb"}));
 app.use(express.static(path.join(__dirname,"public")));
 
@@ -128,4 +162,4 @@ app.get("/login",(_,res)=>res.sendFile(path.join(__dirname,"public","login.html"
 app.get("/list/:id",(_,res)=>res.sendFile(path.join(__dirname,"public","list.html")));
 app.get("/manage/:id/:token",(_,res)=>res.sendFile(path.join(__dirname,"public","manage.html")));
 app.use((_,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
-app.listen(PORT,()=>console.log(`Whishlist.io running on port ${PORT}`));
+loadFromGitHub().catch(err=>console.error("GitHub data restore failed:",err.message)).finally(()=>app.listen(PORT,()=>console.log(`Whishlist.io running on port ${PORT}`)));
