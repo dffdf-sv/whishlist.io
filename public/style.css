@@ -26,3 +26,13 @@ html[data-theme="dark"] .optional input::placeholder,
 html[data-theme="dark"] .optional textarea::placeholder,
 body.dark .optional input::placeholder,
 body.dark .optional textarea::placeholder{color:#a6a9af}
+
+
+/* Warm sunset theme with animated orange glow. */
+html[data-theme="sunset"]{color-scheme:dark;--bg:#1b1012;--surface:#291719;--surface2:#392020;--text:#fff0df;--muted:#d5aaa0;--border:#66352e;--input:#2b191b;--accent:#ff8a3d;--shadow:0 18px 55px rgba(255,93,34,.13)}
+html[data-theme="sunset"] body{background:radial-gradient(ellipse at 12% 88%,rgba(255,105,35,.17),transparent 42%),radial-gradient(ellipse at 92% 5%,rgba(255,168,62,.10),transparent 38%),var(--bg);background-attachment:fixed}
+html[data-theme="sunset"] .theme-toggle{color:#ff9a42!important;filter:drop-shadow(0 0 5px rgba(255,132,42,.75)) drop-shadow(0 0 13px rgba(255,91,27,.48));animation:sunset-pulse 3s ease-in-out infinite}
+html[data-theme="sunset"] .theme-toggle .theme-icon{color:#ff9a42;text-shadow:0 0 7px #ff8a3d,0 0 18px rgba(255,91,27,.9)}
+html[data-theme="sunset"] .theme-toggle:hover{filter:drop-shadow(0 0 8px rgba(255,152,52,.95)) drop-shadow(0 0 22px rgba(255,91,27,.7))}
+html[data-theme="sunset"] .features article,html[data-theme="sunset"] .success,html[data-theme="sunset"] .editor,html[data-theme="sunset"] .item,html[data-theme="sunset"] .wishlist-card{box-shadow:0 14px 38px rgba(255,89,32,.09)}
+@keyframes sunset-pulse{0%,100%{filter:drop-shadow(0 0 4px rgba(255,132,42,.55)) drop-shadow(0 0 10px rgba(255,91,27,.3));transform:scale(1)}50%{filter:drop-shadow(0 0 8px rgba(255,163,62,.95)) drop-shadow(0 0 20px rgba(255,91,27,.65));transform:scale(1.08)}}
